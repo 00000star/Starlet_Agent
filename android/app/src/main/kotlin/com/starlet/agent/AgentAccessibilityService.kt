@@ -107,9 +107,6 @@ class AgentAccessibilityService : AccessibilityService() {
         depth: Int,
         indexCounter: IntArray
     ) {
-        // Viewport Culling Algorithm: Skip nodes that are entirely off-screen
-        if (!node.isVisibleToUser) return
-
         val text = node.text?.toString() ?: ""
         val contentDesc = node.contentDescription?.toString() ?: ""
         val className = node.className?.toString() ?: ""
@@ -120,7 +117,8 @@ class AgentAccessibilityService : AccessibilityService() {
 
         val displayText = if (text.isNotEmpty()) text else contentDesc
         
-        if (displayText.isNotEmpty() || isClickable || isEditable || isScrollable) {
+        // Viewport Culling Algorithm: Only report nodes that are visible to the user
+        if (node.isVisibleToUser && (displayText.isNotEmpty() || isClickable || isEditable || isScrollable)) {
             val currentIndex = indexCounter[0]++
             val tags = mutableListOf<String>()
             if (isClickable) tags.add("clickable")
