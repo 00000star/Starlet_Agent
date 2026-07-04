@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:image/image.dart' as img;
 import 'shizuku_service.dart';
 
 class ReasoningService {
@@ -19,8 +20,9 @@ class ReasoningService {
       throw Exception('DeepSeek API key not found in secure storage.');
     }
 
-    // Minify JSON of the Android screen state
-    final minifiedState = jsonEncode(currentScreenState);
+    // Prune the UI tree to save data and tokens
+    final prunedState = _pruneTree(currentScreenState);
+    final minifiedState = jsonEncode(prunedState);
 
     // Prepare system prompt with strict JSON schema instructions
     final systemPrompt = '''
@@ -131,77 +133,119 @@ $minifiedState
     final screenshotPath = '/sdcard/Download/starlet_vision_fallback.png';
     await _shizukuService.takeScreenshot(screenshotPath);
     
-    // Read the file and convert to base64
     final file = File(screenshotPath);
     if (!await file.exists()) {
-      throw Exception('Screenshot failed.');
-    }
-    final bytes = await file.readAsBytes();
-    final base64Image = base64Encode(bytes);
-
-    // Call DeepSeek Vision (Assuming deepseek-vl or standard GPT-4-vision-preview compatible API)
-    final response = await http.post(
-      Uri.parse('https://api.deepseek.com/chat/completions'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: jsonEncode({
-        'model': 'deepseek-chat', // or 'deepseek-vl' depending on exact endpoint availability
-        'messages': [
-          {
-            'role': 'user',
-            'content': [
-              {'type': 'text', 'text': 'You are a Vision AI fallback. Look at this Android screenshot. Output ONLY strict JSON: {"action": "click_xy", "x": 123, "y": 456}'},
-              {
-                'type': 'image_url',
-                'image_url': {
-                  'url': 'data:image/png;base64,$base64Image'
-                }
-              }
-            ]
-          }
-        ],
-        'response_format': {'type': 'json_object'},
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      final responseBody = jsonDecode(response.body);
-      final content = responseBody['choices'][0]['message']['content'];
-      final actionMap = jsonDecode(content) as Map<String, dynamic>;
-      
-      if (actionMap['action'] == 'click_xy') {
-        int x = actionMap['x'];
-        int y = actionMap['y'];
-        await _shizukuService.tapXY(x, y);
-      } else {
-        throw Exception('Vision fallback returned invalid action.');
-      }
-    } else {
-      throw Exception('Vision API failed: ${response.statusCode}');
+      throw Exception('Screenshot failed to save at $screenshotPath.');
     }
     
-    // Cleanup screenshot
-    await file.delete();
+    try {
+      final bytes = await file.readAsBytes();
+      
+      // Downscale to save RAM and tokens
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) throw Exception('Failed to decode screenshot image.');
+      final resized = img.copyResize(decoded, width: 720); // 720p width
+      final compressed = img.encodeJpg(resized, quality: 60);
+      final base64Image = base64Encode(compressed);
+  
+      // Note: As of late 2024, DeepSeek API does not natively support deepseek-vl image payloads on the chat endpoint.
+      // If this fails, the user must point to an OpenAI-compatible vision endpoint in the backend.
+      final response = await http.post(
+        Uri.parse('https://api.deepseek.com/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
+        },
+        body: jsonEncode({
+          'model': 'deepseek-chat', 
+          'messages': [
+            {
+              'role': 'user',
+              'content': [
+                {'type': 'text', 'text': 'You are a Vision AI fallback. Look at this Android screenshot. Output ONLY strict JSON: {"action": "click_xy", "x": 123, "y": 456}'},
+                {
+                  'type': 'image_url',
+                  'image_url': {
+                    'url': 'data:image/jpeg;base64,$base64Image'
+                  }
+                }
+              ]
+            }
+          ],
+          'response_format': {'type': 'json_object'},
+        }),
+      );
+  
+      if (response.statusCode == 200) {
+        final responseBody = jsonDecode(response.body);
+        final content = responseBody['choices'][0]['message']['content'];
+        final actionMap = jsonDecode(content) as Map<String, dynamic>;
+        
+        if (actionMap['action'] == 'click_xy') {
+          int x = actionMap['x'];
+          int y = actionMap['y'];
+          // Map back to original resolution if needed, but tapXY uses absolute pixels.
+          // Wait, if we resized the image sent to AI, the AI will output coordinates for the 720p image!
+          // We must scale the tap back up to the actual device resolution.
+          final scaleFactor = decoded.width / 720;
+          await _shizukuService.tapXY((x * scaleFactor).toInt(), (y * scaleFactor).toInt());
+        } else {
+          throw Exception('Vision fallback returned invalid action: $content');
+        }
+      } else {
+        throw Exception('Vision API failed: \${response.statusCode} - \${response.body}');
+      }
+    } finally {
+      // Cleanup screenshot to prevent storage leak
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
   }
 
   List<int>? _findNodeCenter(Map<String, dynamic> node, String targetId) {
     if (node['id']?.toString() == targetId) {
-      if (node['bounds'] != null) {
-        // bounds: [left, top, right, bottom]
+      if (node['bounds'] != null && node['bounds'] is List && (node['bounds'] as List).length >= 4) {
         final bounds = node['bounds'] as List<dynamic>;
         int x = (bounds[0] + bounds[2]) ~/ 2;
         int y = (bounds[1] + bounds[3]) ~/ 2;
         return [x, y];
+      } else {
+        throw Exception("Node ID $targetId found but has no valid bounds (possibly invisible/off-screen)");
       }
     }
-    if (node['children'] != null) {
+    if (node['children'] != null && node['children'] is List) {
       for (var child in node['children']) {
-        final result = _findNodeCenter(child as Map<String, dynamic>, targetId);
-        if (result != null) return result;
+        if (child is Map<String, dynamic>) {
+          final result = _findNodeCenter(child, targetId);
+          if (result != null) return result;
+        }
       }
     }
     return null;
+  }
+
+  Map<String, dynamic> _pruneTree(Map<String, dynamic> node) {
+    final pruned = <String, dynamic>{};
+    if (node.containsKey('id')) pruned['id'] = node['id'];
+    if (node.containsKey('text') && node['text'] != null && node['text'].toString().isNotEmpty) pruned['text'] = node['text'];
+    if (node.containsKey('contentDescription') && node['contentDescription'] != null) pruned['desc'] = node['contentDescription'];
+    if (node.containsKey('bounds')) pruned['bounds'] = node['bounds'];
+    
+    if (node.containsKey('children') && node['children'] is List) {
+      final children = <Map<String, dynamic>>[];
+      for (var child in node['children']) {
+        if (child is Map<String, dynamic>) {
+          // Skip if invisible
+          if (child['isVisible'] == false) continue;
+          final prunedChild = _pruneTree(child);
+          if (prunedChild.isNotEmpty) {
+            children.add(prunedChild);
+          }
+        }
+      }
+      if (children.isNotEmpty) pruned['children'] = children;
+    }
+    return pruned;
   }
 }
