@@ -161,6 +161,7 @@ For normal conversation (questions, chat, info requests), just respond with plai
           'messages': messages,
           'temperature': 0.7,
           'max_tokens': 1024,
+          'response_format': {'type': 'json_object'},
         }),
       );
 
@@ -189,28 +190,19 @@ For normal conversation (questions, chat, info requests), just respond with plai
 
   /// Parse the AI response to check if it's an action or plain text
   AgentAction? parseAction(String response) {
-    // Try to parse as JSON action
+    // Try to parse as JSON action using regex to ignore any markdown padding
     try {
-      final trimmed = response.trim();
-      // Handle if the response is wrapped in code fences
-      String jsonStr = trimmed;
-      if (trimmed.startsWith('```')) {
-        final lines = trimmed.split('\n');
-        lines.removeAt(0); // Remove opening fence
-        if (lines.isNotEmpty && lines.last.trim() == '```') {
-          lines.removeLast(); // Remove closing fence
-        }
-        jsonStr = lines.join('\n').trim();
-      }
-
-      if (jsonStr.startsWith('{') && jsonStr.contains('"action"')) {
+      final jsonRegex = RegExp(r'\{.*\}', dotAll: true);
+      final match = jsonRegex.firstMatch(response);
+      if (match != null) {
+        final jsonStr = match.group(0)!;
         final json = jsonDecode(jsonStr) as Map<String, dynamic>;
         if (json.containsKey('action')) {
           return AgentAction.fromJson(json);
         }
       }
-    } catch (_) {
-      // Not JSON, it's plain text conversation
+    } catch (e) {
+      print('Error parsing JSON action: $e');
     }
     return null;
   }
