@@ -91,4 +91,25 @@ class ShizukuService {
   Future<String> getSystemProfile() async {
     return runCommand('dumpsys meminfo');
   }
+
+  /// Tap an element by X Y coordinates
+  Future<String> tapXY(int x, int y) async {
+    return runCommand('input tap $x $y');
+  }
+
+  /// Inject text
+  Future<String> injectText(String text) async {
+    final safeText = text.replaceAll(' ', '%s');
+    return runCommand('input text "$safeText"');
+  }
+  
+  /// Scroll (swipe)
+  Future<String> swipe(int startX, int startY, int endX, int endY) async {
+    return runCommand('input swipe $startX $startY $endX $endY');
+  }
+
+  /// Take a screenshot
+  Future<String> takeScreenshot(String path) async {
+    return runCommand('screencap -p $path');
+  }
 }
