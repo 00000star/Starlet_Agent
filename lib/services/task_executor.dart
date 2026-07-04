@@ -70,6 +70,10 @@ Rules:
 - Keep reasoning very brief (1 sentence)
 ''';
 
+  void _report(String message) {
+    onProgress?.call(message);
+  }
+
   Future<String> executeTask(String userGoal) async {
     final isRunning = await _screenService.isServiceRunning();
     if (!isRunning) {
