@@ -5,6 +5,7 @@ import '../services/action_handler.dart';
 import '../services/voice_service.dart';
 import '../widgets/message_bubble.dart';
 import '../services/telegram_service.dart';
+import '../widgets/emergency_halt_button.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -263,6 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      floatingActionButton: const EmergencyHaltButton(),
       body: Column(
         children: [
           // API key warning

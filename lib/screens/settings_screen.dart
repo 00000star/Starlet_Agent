@@ -197,7 +197,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           TextField(
             controller: _apiKeyController,
             decoration: InputDecoration(
-              labelText: 'API Key',
+              labelText: 'DeepSeek API Key',
               hintText: 'sk-...',
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(

@@ -15,6 +15,8 @@ class TaskExecutor {
   final AppLauncherService _appLauncher;
   final NotificationService _notificationService = NotificationService();
 
+  static bool isHalted = false;
+
   /// Callback to report progress messages to the UI
   final void Function(String message)? onProgress;
 
@@ -72,7 +74,16 @@ Rules:
     results.add('Starting task: $userGoal');
     _report('Starting task: $userGoal');
 
+    isHalted = false;
+
     for (int step = 0; step < _aiService.maxSteps; step++) {
+      if (isHalted) {
+        results.add('Task halted by user.');
+        _report('Task halted by user.');
+        _notificationService.showTaskCompleteNotification('Task Halted', 'Emergency halt triggered.');
+        return results.join('\n');
+      }
+
       // Small delay to let UI settle
       await Future.delayed(const Duration(milliseconds: 500));
 
