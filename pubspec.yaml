@@ -44,7 +44,7 @@ dependencies:
 
   # Ambient Sensor Fusion
   sensors_plus: ^5.0.1
-  light_sensor: ^1.0.0
+  light_sensor: ^3.0.2
 
 dev_dependencies:
   flutter_test:
