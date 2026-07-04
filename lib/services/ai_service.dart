@@ -238,4 +238,69 @@ For normal conversation (questions, chat, info requests), just respond with plai
       return [];
     }
   }
+
+  /// Send a stateless message to the AI, specifying a custom system prompt and image fallback.
+  /// Does not pollute the main conversation history (solves OOM for 4GB RAM).
+  Future<String> sendStatelessMessage(String prompt, {String? systemOverride, String? base64Image}) async {
+    if (_apiKey == null || _apiKey!.isEmpty) {
+      throw Exception('API Key is not configured.');
+    }
+
+    try {
+      String requestUrl = _baseUrl;
+      if (!requestUrl.endsWith('/chat/completions')) {
+        if (requestUrl.endsWith('/')) {
+          requestUrl = '${requestUrl}chat/completions';
+        } else {
+          requestUrl = '$requestUrl/chat/completions';
+        }
+      }
+      
+      final userContent = <Map<String, dynamic>>[
+        {'type': 'text', 'text': prompt}
+      ];
+      
+      if (base64Image != null) {
+        userContent.add({
+          'type': 'image_url',
+          'image_url': {
+            'url': 'data:image/jpeg;base64,$base64Image'
+          }
+        });
+      }
+
+      final response = await http.post(
+        Uri.parse(requestUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_apiKey',
+          'HTTP-Referer': 'https://github.com/orailnoor/private-agent',
+          'X-Title': 'PrivateAgent',
+        },
+        body: jsonEncode({
+          'model': _model,
+          'messages': [
+            {'role': 'system', 'content': systemOverride ?? _systemPrompt},
+            {'role': 'user', 'content': userContent},
+          ],
+          'temperature': 0.7,
+          'max_tokens': 1024,
+          'response_format': {'type': 'json_object'},
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        final errorBody = jsonDecode(response.body);
+        throw Exception(
+          'API error (${response.statusCode}): ${errorBody['error']?['message'] ?? response.body}',
+        );
+      }
+
+      final data = jsonDecode(response.body);
+      return data['choices'][0]['message']['content'] as String;
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Network error: $e');
+    }
+  }
 }

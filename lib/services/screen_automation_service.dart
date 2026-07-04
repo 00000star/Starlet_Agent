@@ -44,54 +44,17 @@ class ScreenAutomationService {
   }
 
   /// Get a simplified text description of the current screen for the LLM
+  /// Optimized: Uses the Native String-Builder Algorithm to prevent 4GB RAM OOMs.
   Future<String> getScreenDescription() async {
-    final nodes = await dumpScreen();
-    if (nodes.isEmpty) {
-      return 'Could not read screen. Make sure accessibility service is enabled.';
-    }
-
-    final buffer = StringBuffer();
-    final pkg = await getCurrentPackage();
-    if (pkg != null) {
-      buffer.writeln('Current app: $pkg');
-    }
-    buffer.writeln('Screen elements:');
-
-    for (final node in nodes) {
-      final index = node['index'];
-      final text = node['text'] ?? '';
-      final desc = node['contentDescription'] ?? '';
-      final className = node['className'] ?? '';
-      final isClickable = node['isClickable'] == true;
-      final isEditable = node['isEditable'] == true;
-      final isScrollable = node['isScrollable'] == true;
-
-      final displayText = text.isNotEmpty ? text : desc;
-      if (displayText.isEmpty && !isClickable && !isEditable && !isScrollable) {
-        continue; // Skip empty non-interactive nodes
+    try {
+      final result = await _channel.invokeMethod<String>('getScreenDescriptionString');
+      if (result == null || result.isEmpty) {
+        return 'Could not read screen. Make sure accessibility service is enabled.';
       }
-
-      final tags = <String>[];
-      if (isClickable) tags.add('clickable');
-      if (isEditable) tags.add('editable');
-      if (isScrollable) tags.add('scrollable');
-
-      final label = displayText.isNotEmpty ? '"$displayText"' : '(no text)';
-      final type = className.isNotEmpty ? '[$className]' : '';
-      final tagStr = tags.isNotEmpty ? '{${tags.join(", ")}}' : '';
-      
-      String boundsStr = '';
-      if (node['bounds'] != null) {
-        final b = node['bounds'];
-        final centerX = (b['left'] + b['right']) / 2;
-        final centerY = (b['top'] + b['bottom']) / 2;
-        boundsStr = ' bounds:[${b['left']},${b['top']},${b['right']},${b['bottom']}] center:(${centerX.round()},${centerY.round()})';
-      }
-
-      buffer.writeln('  [$index] $type $label $tagStr$boundsStr');
+      return result;
+    } catch (e) {
+      return 'Error reading screen: \$e';
     }
-
-    return buffer.toString();
   }
 
   /// Click an element by its visible text

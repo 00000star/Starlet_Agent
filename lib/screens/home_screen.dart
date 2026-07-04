@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 import '../services/ai_service.dart';
@@ -265,8 +266,21 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       floatingActionButton: const EmergencyHaltButton(),
-      body: Column(
-        children: [
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0A0A0F),
+              Color(0xFF18152E),
+              Color(0xFF0A0A0F),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: Column(
+          children: [
           // API key warning
           if (!_aiService.isConfigured)
             MaterialBanner(
@@ -333,66 +347,104 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
           // Input bar
-          Container(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(
-                top: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 0.5,
-                ),
-              ),
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  // Mic button
-                  IconButton(
-                    icon: Icon(
-                      _isListening ? Icons.mic : Icons.mic_none,
-                      color: _isListening
-                          ? Colors.red
-                          : Theme.of(context).colorScheme.primary,
+          ClipRRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  border: Border(
+                    top: BorderSide(
+                      color: Colors.white.withOpacity(0.1),
+                      width: 1.0,
                     ),
-                    onPressed: _isLoading ? null : _toggleVoice,
                   ),
-                  // Text input
-                  Expanded(
-                    child: TextField(
-                      controller: _textController,
-                      decoration: InputDecoration(
-                        hintText: _isListening
-                            ? 'Listening...'
-                            : 'Type a command...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      // Glowing Mic button
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: _isListening ? [
+                            BoxShadow(
+                              color: const Color(0xFFFF3366).withOpacity(0.6),
+                              blurRadius: 12,
+                              spreadRadius: 2,
+                            )
+                          ] : [],
                         ),
-                        filled: true,
-                        fillColor: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
+                        child: IconButton(
+                          icon: Icon(
+                            _isListening ? Icons.mic : Icons.mic_none,
+                            color: _isListening
+                                ? const Color(0xFFFF3366)
+                                : const Color(0xFF00FFC6),
+                          ),
+                          onPressed: _isLoading ? null : _toggleVoice,
                         ),
                       ),
-                      textInputAction: TextInputAction.send,
-                      onSubmitted:
-                          _isLoading ? null : (text) => _sendMessage(text),
-                    ),
+                      const SizedBox(width: 8),
+                      // Text input
+                      Expanded(
+                        child: TextField(
+                          controller: _textController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: _isListening
+                                ? 'Listening...'
+                                : 'Type a command...',
+                            hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide(
+                                color: Colors.white.withOpacity(0.2),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide(
+                                color: Colors.white.withOpacity(0.1),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF6C63FF),
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: Colors.black.withOpacity(0.3),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                          ),
+                          textInputAction: TextInputAction.send,
+                          onSubmitted:
+                              _isLoading ? null : (text) => _sendMessage(text),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Send button
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFF6C63FF).withOpacity(0.15),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.send_rounded),
+                          color: const Color(0xFF6C63FF),
+                          onPressed: _isLoading
+                              ? null
+                              : () => _sendMessage(_textController.text),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  // Send button
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    color: Theme.of(context).colorScheme.primary,
-                    onPressed: _isLoading
-                        ? null
-                        : () => _sendMessage(_textController.text),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

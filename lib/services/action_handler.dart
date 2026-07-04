@@ -148,6 +148,7 @@ class ActionHandler {
             aiService: aiService,
             screenService: _screenAutomation,
             appLauncher: _appLauncher,
+            shizukuService: _shizuku,
             onProgress: onProgress,
           );
           result = await executor.executeTask(goal);

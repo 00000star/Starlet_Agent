@@ -75,6 +75,78 @@ class AgentAccessibilityService : AccessibilityService() {
         return nodes
     }
 
+    private var cachedScreenDescription: String? = null
+
+    /** High-Performance Native String-Builder Algorithm with Viewport Culling */
+    fun getScreenDescriptionString(): String {
+        if (isCacheValid && cachedScreenDescription != null) {
+            return cachedScreenDescription!!
+        }
+        val root = rootInActiveWindow ?: return "Could not read screen. Accessibility root is null."
+        val builder = StringBuilder()
+        
+        val pkg = root.packageName?.toString()
+        if (pkg != null) {
+            builder.append("Current app: ").append(pkg).append("\n")
+        }
+        builder.append("Screen elements:\n")
+        
+        var indexCounter = intArrayOf(0)
+        traverseNodeForString(root, builder, 0, indexCounter)
+        
+        root.recycle()
+        val result = builder.toString()
+        cachedScreenDescription = result
+        isCacheValid = true
+        return result
+    }
+
+    private fun traverseNodeForString(
+        node: AccessibilityNodeInfo,
+        builder: StringBuilder,
+        depth: Int,
+        indexCounter: IntArray
+    ) {
+        // Viewport Culling Algorithm: Skip nodes that are entirely off-screen
+        if (!node.isVisibleToUser) return
+
+        val text = node.text?.toString() ?: ""
+        val contentDesc = node.contentDescription?.toString() ?: ""
+        val className = node.className?.toString() ?: ""
+        
+        val isClickable = node.isClickable
+        val isEditable = node.isEditable
+        val isScrollable = node.isScrollable
+
+        val displayText = if (text.isNotEmpty()) text else contentDesc
+        
+        if (displayText.isNotEmpty() || isClickable || isEditable || isScrollable) {
+            val currentIndex = indexCounter[0]++
+            val tags = mutableListOf<String>()
+            if (isClickable) tags.add("clickable")
+            if (isEditable) tags.add("editable")
+            if (isScrollable) tags.add("scrollable")
+
+            val label = if (displayText.isNotEmpty()) "\"\$displayText\"" else "(no text)"
+            val type = if (className.isNotEmpty()) "[\${className.substringAfterLast('.')}]" else ""
+            val tagStr = if (tags.isNotEmpty()) "{\${tags.joinToString(\", \")}}" else ""
+            
+            val rect = Rect()
+            node.getBoundsInScreen(rect)
+            val centerX = (rect.left + rect.right) / 2
+            val centerY = (rect.top + rect.bottom) / 2
+            val boundsStr = " bounds:[\${rect.left},\${rect.top},\${rect.right},\${rect.bottom}] center:(\$centerX,\$centerY)"
+            
+            builder.append("  [\$currentIndex] \$type \$label \$tagStr\$boundsStr\n")
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            traverseNodeForString(child, builder, depth + 1, indexCounter)
+            child.recycle()
+        }
+    }
+
     private fun traverseNode(
         node: AccessibilityNodeInfo,
         nodes: MutableList<Map<String, Any?>>,
@@ -138,11 +210,22 @@ class AgentAccessibilityService : AccessibilityService() {
                     hardwareBuffer.close()
 
                     if (bitmap != null) {
+                        // Native Zero-Copy Image Resizer: Downscale to 720p to save RAM and tokens
+                        var finalBitmap = bitmap
+                        var scaleFactor = 1.0f
+                        if (bitmap.width > 720) {
+                            scaleFactor = 720f / bitmap.width
+                            val newHeight = (bitmap.height * scaleFactor).toInt()
+                            finalBitmap = Bitmap.createScaledBitmap(bitmap, 720, newHeight, true)
+                        }
+                        
                         // Compress to lower quality JPEG to save bytes for the API
                         val byteArrayOutputStream = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 60, byteArrayOutputStream)
+                        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 60, byteArrayOutputStream)
                         val byteArray = byteArrayOutputStream.toByteArray()
-                        val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
+                        
+                        // We append the scale factor at the start so Flutter knows how to scale taps back up
+                        val base64String = "\$scaleFactor|" + Base64.encodeToString(byteArray, Base64.NO_WRAP)
                         callback(base64String)
                     } else {
                         callback(null)
@@ -158,15 +241,79 @@ class AgentAccessibilityService : AccessibilityService() {
 
     // ─── Actions ─────────────────────────────────────────────────
 
-    /** Find and click a node by its text content */
+    /** Invented Breakthrough: Fuzzy Semantic Interaction Engine (Self-Healing Clicks) */
     fun clickByText(targetText: String): Boolean {
         val root = rootInActiveWindow ?: return false
-        val result = findAndClickNode(root, targetText)
+        var result = findAndClickNodeExact(root, targetText)
+        if (!result) {
+            // Self-healing fallback: Find best fuzzy match
+            var bestMatch: AccessibilityNodeInfo? = null
+            var bestScore = Int.MAX_VALUE
+            
+            fun fuzzySearch(node: AccessibilityNodeInfo) {
+                val text = node.text?.toString() ?: ""
+                val desc = node.contentDescription?.toString() ?: ""
+                
+                if (text.isNotEmpty() || desc.isNotEmpty()) {
+                    val scoreText = if (text.isNotEmpty()) levenshtein(normalize(text), normalize(targetText)) else Int.MAX_VALUE
+                    val scoreDesc = if (desc.isNotEmpty()) levenshtein(normalize(desc), normalize(targetText)) else Int.MAX_VALUE
+                    val minScore = minOf(scoreText, scoreDesc)
+                    
+                    // Allow up to 30% error margin based on string length
+                    val threshold = (targetText.length * 0.3).toInt().coerceAtLeast(1)
+                    
+                    if (minScore <= threshold && minScore < bestScore) {
+                        bestScore = minScore
+                        bestMatch = node
+                    }
+                }
+                
+                for (i in 0 until node.childCount) {
+                    val child = node.getChild(i) ?: continue
+                    fuzzySearch(child)
+                }
+            }
+            
+            fuzzySearch(root)
+            
+            if (bestMatch != null) {
+                var clickTarget: AccessibilityNodeInfo? = bestMatch
+                while (clickTarget != null && !clickTarget.isClickable) {
+                    clickTarget = clickTarget.parent
+                }
+                if (clickTarget != null) {
+                    result = clickTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+            }
+        }
         root.recycle()
         return result
     }
 
-    private fun findAndClickNode(node: AccessibilityNodeInfo, targetText: String): Boolean {
+    private fun normalize(str: String): String {
+        return str.replace(Regex("[^A-Za-z0-9]"), "").lowercase()
+    }
+
+    private fun levenshtein(lhs: CharSequence, rhs: CharSequence): Int {
+        var cost = IntArray(lhs.length + 1) { it }
+        var newCost = IntArray(lhs.length + 1)
+        for (i in 1..rhs.length) {
+            newCost[0] = i
+            for (j in 1..lhs.length) {
+                val match = if (lhs[j - 1] == rhs[i - 1]) 0 else 1
+                val costReplace = cost[j - 1] + match
+                val costInsert = cost[j] + 1
+                val costDelete = newCost[j - 1] + 1
+                newCost[j] = minOf(costInsert, costDelete, costReplace)
+            }
+            val swap = cost
+            cost = newCost
+            newCost = swap
+        }
+        return cost[lhs.length]
+    }
+
+    private fun findAndClickNodeExact(node: AccessibilityNodeInfo, targetText: String): Boolean {
         val text = node.text?.toString() ?: ""
         val desc = node.contentDescription?.toString() ?: ""
 
@@ -175,24 +322,20 @@ class AgentAccessibilityService : AccessibilityService() {
             text.contains(targetText, ignoreCase = true) ||
             desc.contains(targetText, ignoreCase = true)
         ) {
-            // Click this node or its clickable parent
             var clickTarget: AccessibilityNodeInfo? = node
             while (clickTarget != null && !clickTarget.isClickable) {
                 clickTarget = clickTarget.parent
             }
             if (clickTarget != null) {
-                val success = clickTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                return success
+                return clickTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             }
         }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            if (findAndClickNode(child, targetText)) {
-                child.recycle()
+            if (findAndClickNodeExact(child, targetText)) {
                 return true
             }
-            child.recycle()
         }
         return false
     }

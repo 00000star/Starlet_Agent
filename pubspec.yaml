@@ -46,9 +46,6 @@ dependencies:
   sensors_plus: ^5.0.1
   light_sensor: ^3.0.2
 
-  # Image compression
-  image: ^4.1.7
-
 dev_dependencies:
   flutter_test:
     sdk: flutter

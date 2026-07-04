@@ -99,8 +99,9 @@ class ShizukuService {
 
   /// Inject text
   Future<String> injectText(String text) async {
-    final safeText = text.replaceAll(' ', '%s');
-    return runCommand('input text "$safeText"');
+    // Escape single quotes for bash and spaces for Android 'input text'
+    final escapedText = text.replaceAll("'", "'\"'\"'").replaceAll(' ', '%s');
+    return runCommand("input text '\$escapedText'");
   }
   
   /// Scroll (swipe)

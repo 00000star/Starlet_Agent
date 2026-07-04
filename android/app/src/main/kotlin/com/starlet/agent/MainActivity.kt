@@ -37,6 +37,16 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    "getScreenDescriptionString" -> {
+                        val service = AgentAccessibilityService.instance
+                        if (service == null) {
+                            result.error("SERVICE_NOT_RUNNING", "Accessibility service is not running", null)
+                        } else {
+                            val desc = service.getScreenDescriptionString()
+                            result.success(desc)
+                        }
+                    }
+
                     "takeScreenshot" -> {
                         val service = AgentAccessibilityService.instance
                         if (service == null) {
