@@ -552,13 +552,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                       color: isRunning ? Colors.green : Colors.grey,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      isRunning
-                          ? 'Screen Control is active'
-                          : 'Screen Control is disabled',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isRunning ? Colors.green : Colors.grey,
+                    Flexible(
+                      child: Text(
+                        isRunning
+                            ? 'Screen Control is active'
+                            : 'Screen Control is disabled',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: isRunning ? Colors.green : Colors.grey,
+                        ),
                       ),
                     ),
                   ],
@@ -587,11 +589,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                         size: 16,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        'Can read screen, tap, scroll, and type in other apps',
-                        style: TextStyle(
-                          color: Colors.green[700],
-                          fontSize: 13,
+                      Flexible(
+                        child: Text(
+                          'Can read screen, tap, scroll, and type in other apps',
+                          style: TextStyle(
+                            color: Colors.green[700],
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],

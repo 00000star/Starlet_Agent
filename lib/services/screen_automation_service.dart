@@ -53,7 +53,7 @@ class ScreenAutomationService {
       }
       return result;
     } catch (e) {
-      return 'Error reading screen: \$e';
+      return 'Error reading screen: $e';
     }
   }
 

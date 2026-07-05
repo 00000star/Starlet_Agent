@@ -1,4 +1,5 @@
 import 'dart:ui';
+import '../services/task_executor.dart';
 import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 import '../services/ai_service.dart';
@@ -265,7 +266,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: const EmergencyHaltButton(),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -428,17 +428,29 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Send button
+                      // Send / Halt button
                       Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFF6C63FF).withOpacity(0.15),
+                          color: _isLoading 
+                              ? const Color(0xFFFF3366).withOpacity(0.15) 
+                              : const Color(0xFF6C63FF).withOpacity(0.15),
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.send_rounded),
-                          color: const Color(0xFF6C63FF),
+                          icon: Icon(
+                            _isLoading ? Icons.stop_rounded : Icons.send_rounded,
+                          ),
+                          color: _isLoading
+                              ? const Color(0xFFFF3366)
+                              : const Color(0xFF6C63FF),
                           onPressed: _isLoading
-                              ? null
+                              ? () {
+                                  // Trigger Emergency Halt
+                                  TaskExecutor.isHalted = true;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Emergency Halt Triggered! Stopping loop...')),
+                                  );
+                                }
                               : () => _sendMessage(_textController.text),
                         ),
                       ),

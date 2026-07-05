@@ -125,17 +125,17 @@ class AgentAccessibilityService : AccessibilityService() {
             if (isEditable) tags.add("editable")
             if (isScrollable) tags.add("scrollable")
 
-            val label = if (displayText.isNotEmpty()) "\"\$displayText\"" else "(no text)"
-            val type = if (className.isNotEmpty()) "[\${className.substringAfterLast('.')}]" else ""
-            val tagStr = if (tags.isNotEmpty()) "{\${tags.joinToString(\", \")}}" else ""
+            val label = if (displayText.isNotEmpty()) "\"$displayText\"" else "(no text)"
+            val type = if (className.isNotEmpty()) "[${className.substringAfterLast('.')}]" else ""
+            val tagStr = if (tags.isNotEmpty()) "{${tags.joinToString(", ")}}" else ""
             
             val rect = Rect()
             node.getBoundsInScreen(rect)
             val centerX = (rect.left + rect.right) / 2
             val centerY = (rect.top + rect.bottom) / 2
-            val boundsStr = " bounds:[\${rect.left},\${rect.top},\${rect.right},\${rect.bottom}] center:(\$centerX,\$centerY)"
+            val boundsStr = " bounds:[${rect.left},${rect.top},${rect.right},${rect.bottom}] center:($centerX,$centerY)"
             
-            builder.append("  [\$currentIndex] \$type \$label \$tagStr\$boundsStr\n")
+            builder.append("  [$currentIndex] $type $label $tagStr$boundsStr\n")
         }
 
         for (i in 0 until node.childCount) {
